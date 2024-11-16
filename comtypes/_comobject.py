@@ -76,15 +76,14 @@ def winerror(exc):
         # cases we return a generic error code.
         return E_FAIL
     raise TypeError(
-        "Expected comtypes.COMERROR or WindowsError instance, got %s"
-        % type(exc).__name__
+        f"Expected comtypes.COMERROR or WindowsError instance, got {type(exc).__name__}"
     )
 
 
 def _do_implement(interface_name, method_name):
     def _not_implemented(*args):
         """Return E_NOTIMPL because the method is not implemented."""
-        _debug("unimplemented method %s_%s called", interface_name, method_name)
+        _debug(f"unimplemented method {interface_name}_{method_name} called")
         return E_NOTIMPL
 
     return _not_implemented
@@ -101,20 +100,16 @@ def catch_errors(obj, mth, paramflags, interface, mthname):
             return ReportError(text, iid=interface._iid_, clsid=clsid, hresult=hresult)
         except (COMError, WindowsError) as details:
             _error(
-                "Exception in %s.%s implementation:",
-                interface.__name__,
-                mthname,
+                f"Exception in {interface.__name__}.{mthname} implementation:",
                 exc_info=True,
             )
             return HRESULT_FROM_WIN32(winerror(details))
         except E_NotImplemented:
-            _warning("Unimplemented method %s.%s called", interface.__name__, mthname)
+            _warning(f"Unimplemented method {interface.__name__}.{mthname} called")
             return E_NOTIMPL
         except:
             _error(
-                "Exception in %s.%s implementation:",
-                interface.__name__,
-                mthname,
+                f"Exception in {interface.__name__}.{mthname} implementation:",
                 exc_info=True,
             )
             return ReportException(E_FAIL, interface._iid_, clsid=clsid)
@@ -178,7 +173,7 @@ def hack(inst, mth, paramflags, interface, mthname):
                 args[args_out_idx[0]][0] = result
             elif args_out != 0:
                 if len(result) != args_out:
-                    msg = "Method should have returned a %s-tuple" % args_out
+                    msg = f"Method should have returned a {args_out}-tuple"
                     raise ValueError(msg)
                 for i, value in enumerate(result):
                     args[args_out_idx[i]][0] = value
@@ -188,9 +183,7 @@ def hack(inst, mth, paramflags, interface, mthname):
         except COMError as err:
             (hr, text, details) = err.args
             _error(
-                "Exception in %s.%s implementation:",
-                interface.__name__,
-                mthname,
+                f"Exception in {interface.__name__}.{mthname} implementation:",
                 exc_info=True,
             )
             try:
@@ -198,26 +191,22 @@ def hack(inst, mth, paramflags, interface, mthname):
             except (ValueError, TypeError):
                 msg = str(details)
             else:
-                msg = "%s: %s" % (source, descr)
+                msg = f"{source}: {descr}"
             hr = HRESULT_FROM_WIN32(hr)
             return ReportError(msg, iid=interface._iid_, clsid=clsid, hresult=hr)
         except WindowsError as details:
             _error(
-                "Exception in %s.%s implementation:",
-                interface.__name__,
-                mthname,
+                f"Exception in {interface.__name__}.{mthname} implementation:",
                 exc_info=True,
             )
             hr = HRESULT_FROM_WIN32(winerror(details))
             return ReportException(hr, interface._iid_, clsid=clsid)
         except E_NotImplemented:
-            _warning("Unimplemented method %s.%s called", interface.__name__, mthname)
+            _warning(f"Unimplemented method {interface.__name__}.{mthname} called")
             return E_NOTIMPL
         except:
             _error(
-                "Exception in %s.%s implementation:",
-                interface.__name__,
-                mthname,
+                f"Exception in {interface.__name__}.{mthname} implementation:",
                 exc_info=True,
             )
             return ReportException(E_FAIL, interface._iid_, clsid=clsid)
@@ -251,7 +240,7 @@ class _MethodFinder(object):
         return getattr(self.inst, mthname)
 
     def find_impl(self, interface, mthname, paramflags, idlflags):
-        fq_name = "%s_%s" % (interface.__name__, mthname)
+        fq_name = f"{interface.__name__}_{mthname}"
         if interface._case_insensitive_:
             # simple name, like 'QueryInterface'
             mthname = self.names.get(mthname.lower(), mthname)
@@ -273,7 +262,7 @@ class _MethodFinder(object):
             return self.getter(propname)
         if "propput" in idlflags and len(paramflags) == 1:
             return self.setter(propname)
-        _debug("%r: %s.%s not implemented", self.inst, interface.__name__, mthname)
+        _debug(f"{self.inst!r}: {interface.__name__}.{mthname} not implemented")
         return None
 
     def setter(self, propname):
@@ -306,7 +295,7 @@ def _create_vtbl_type(fields, itf):
         class Vtbl(Structure):
             _fields_ = fields
 
-        Vtbl.__name__ = "Vtbl_%s" % itf.__name__
+        Vtbl.__name__ = f"Vtbl_{itf.__name__}"
         _vtbl_types[fields] = Vtbl
         return Vtbl
 
@@ -589,7 +578,7 @@ class COMObject(object):
     @staticmethod
     def __keep__(obj):
         COMObject._instances_[obj] = None
-        _debug("%d active COM objects: Added   %r", len(COMObject._instances_), obj)
+        _debug(f"{len(COMObject._instances_):d} active COM objects: Added   {obj!r}")
         if COMObject.__server__:
             COMObject.__server__.Lock()
 
@@ -598,10 +587,12 @@ class COMObject(object):
         try:
             del COMObject._instances_[obj]
         except AttributeError:
-            _debug("? active COM objects: Removed %r", obj)
+            _debug(f"? active COM objects: Removed {obj!r}")
         else:
-            _debug("%d active COM objects: Removed %r", len(COMObject._instances_), obj)
-        _debug("Remaining: %s", list(COMObject._instances_.keys()))
+            _debug(
+                f"{len(COMObject._instances_):d} active COM objects: Removed {obj!r}"
+            )
+        _debug(f"Remaining: {list(COMObject._instances_.keys())}")
         if COMObject.__server__:
             COMObject.__server__.Unlock()
 
@@ -616,7 +607,7 @@ class COMObject(object):
         result = __InterlockedIncrement(self._refcnt)
         if result == 1:
             self.__keep__(self)
-        _debug("%r.AddRef() -> %s", self, result)
+        _debug(f"{self!r}.AddRef() -> {result:d}")
         return result
 
     def _final_release_(self):
@@ -632,7 +623,7 @@ class COMObject(object):
         # have been deleted already - so we supply it as default
         # argument.
         result = __InterlockedDecrement(self._refcnt)
-        _debug("%r.Release() -> %s", self, result)
+        _debug(f"{self!r}.Release() -> {result:d}")
         if result == 0:
             self._final_release_()
             self.__unkeep__(self)
@@ -647,9 +638,9 @@ class COMObject(object):
         ptr = self._com_pointers_.get(iid, None)
         if ptr is not None:
             # CopyComPointer(src, dst) calls AddRef!
-            _debug("%r.QueryInterface(%s) -> S_OK", self, iid)
+            _debug(f"{self!r}.QueryInterface({iid}) -> S_OK")
             return CopyComPointer(ptr, ppvObj)
-        _debug("%r.QueryInterface(%s) -> E_NOINTERFACE", self, iid)
+        _debug(f"{self!r}.QueryInterface({iid}) -> E_NOINTERFACE")
         return E_NOINTERFACE
 
     def QueryInterface(self, interface):
